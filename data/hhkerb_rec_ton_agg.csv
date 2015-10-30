@@ -1,23 +1,23 @@
-,Authority,Aluminium cans,Co mingled materials,Composite food and beverage cartons,HDPE [2],Mixed Plastic Bottles,Mixed cans,Mixed glass,Plastics,Steel cans
-0,Blaenau Gwent CBC,,7111.5,,,,,,,
-1,Bridgend CBC,172.44,,,,,,3206.88,1498.68,513.14
-2,Caerphilly CBC,,17828.17,,,,,,,
-3,Cardiff County Council,,32416.59,,8.98,,,,,
-4,Carmarthenshire County Council,,13012.69,,,,,,,
-5,Ceredigion County Council,,5418.42,,,,,,,
-6,City  and County of Swansea ,,15855.87,,,,,,3599.84,
-7,Conwy CBC,,,,,,547.92,3119.25,1066.46,
-8,Denbighshire County Council,,9720.21,,,,,,,
-9,Flintshire County Council,165.22,12.24,,,1163.0,,3749.76,,413.9
-10,Gwynedd Council,94.63,,17.82,,805.62,,3174.23,24.82,428.36
-11,Isle of Anglesey CC,,,,,493.68,307.03,1711.6,,
-12,Merthyr Tydfil CBC,,6093.504,,,,,,,
-13,Monmouthshire CC,,10836.98,,,,,,,
-14,Neath Port Talbot CBC,,,,,556.0,84.0,3139.0,724.0,
-15,Newport City Council,242.85,,,,984.06,,3689.12,952.04,567.04
-16,Pembrokeshire County Council,,8697.85,,,,,2322.24,,
-17,Powys County Council,,1767.754,,,,0.42,3611.444,194.779,
-18,Rhondda Cynon Taff CBC,,4762.3,23.89,,,1461.95,7217.65,3991.24,
-19,Torfaen CBC,133.48,,,,,,2079.91,817.63,386.49
-20,Vale of Glamorgan Council,,12563.1,,,,,,,
-21,Wrexham CBC,,8261.7,,,,,,,
+,Authority,Aluminium cans,Co mingled materials,Composite food and beverage cartons,HDPE [2],Mixed Plastic Bottles,Mixed cans,Mixed glass,Plastics,Steel cans,sum_dry_rec
+0,Blaenau Gwent CBC,,7111.5,,,,,,,,7111.5
+1,Bridgend CBC,172.44,,,,,,3206.88,1498.68,513.14,10763.07
+2,Caerphilly CBC,,17828.17,,,,,,,,17828.17
+3,Cardiff County Council,,32416.59,,8.98,,,,,,32774.61
+4,Carmarthenshire County Council,,13012.69,,,,,,,,13012.69
+5,Ceredigion County Council,,5418.42,,,,,,,,5424.04
+6,City  and County of Swansea ,,15855.87,,,,,,3599.84,,19455.71
+7,Conwy CBC,,,,,,547.92,3119.25,1066.46,,8979.32
+8,Denbighshire County Council,,9720.21,,,,,,,,9720.21
+9,Flintshire County Council,165.22,12.24,,,1163.0,,3749.76,,413.9,10907.81
+10,Gwynedd Council,94.63,,17.82,,805.62,,3174.23,24.82,428.36,8570.59
+11,Isle of Anglesey CC,,,,,493.68,307.03,1711.6,,,4496.97
+12,Merthyr Tydfil CBC,,6093.504,,,,,,,,6093.504
+13,Monmouthshire CC,,10836.98,,,,,,,,10836.98
+14,Neath Port Talbot CBC,,,,,556.0,84.0,3139.0,724.0,,10407.4
+15,Newport City Council,242.85,,,,984.06,,3689.12,952.04,567.04,11339.28
+16,Pembrokeshire County Council,,8697.85,,,,,2322.24,,,11020.09
+17,Powys County Council,,1767.754,,,,0.42,3611.444,194.779,,10273.281
+18,Rhondda Cynon Taff CBC,,4762.3,23.89,,,1461.95,7217.65,3991.24,,32346.86
+19,Torfaen CBC,133.48,,,,,,2079.91,817.63,386.49,6283.59
+20,Vale of Glamorgan Council,,12563.1,,,,,,,,12563.1
+21,Wrexham CBC,,8261.7,,,,,,,,8261.7
