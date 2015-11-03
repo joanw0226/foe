@@ -45,6 +45,20 @@ def get_hhkerb_rec_ton_qtr(df=None):
     hhkerb_rec_ton_qtr = hhkerb_rec_ton_qtr.reset_index()
     return hhkerb_rec_ton_qtr
 
+def get_hhkerb_reu_ton_la(df=None):
+    if df is None:
+        df = get_data()
+    hhkerb_rec = df[df.QuestionNumber == 'Q010']
+    hhkerb_reu_ton = hhkerb_rec.groupby('ColText').get_group('Tonnage Collected for Reuse')
+    hhkerb_reu_ton_qtr = hhkerb_reu_ton.pivot_table(values='Data', index=['Authority','Period'],
+                                         columns='RowText', aggfunc = lambda x: x)
+    hhkerb_reu_ton_qtr = hhkerb_reu_ton_qtr.reset_index()
+    hhkerb_reu_ton_all = hhkerb_reu_ton_qtr.groupby('Authority').agg(np.sum)
+    hhkerb_reu_ton_all = hhkerb_reu_ton_all.reset_index()
+    hhkerb_reu_ton_all['sum_dry_rec'] = hhkerb_reu_ton_all.sum(axis=1)
+    hhkerb_reu_ton_la = hhkerb_reu_ton_all[['Authority','sum_dry_rec']]
+    return hhkerb_reu_ton_la
+
 def get_hhkerb_rec_ton_la(df=None):
     if df is None:
         df = get_hhkerb_rec_ton_qtr()
@@ -63,7 +77,11 @@ def get_hhkerb_rec_ton_la(df=None):
                                                 'Textiles only','Video tapes, DVDs and CDs',
                                                 'WEEE - Fridges & Freezers','WEEE - Large Domestic App',
                                                 'WEEE - Small Domestic App','Wood'],axis = 1)
-    return hhkerb_rec_ton_agg
+    merge = hhkerb_rec_ton_agg.merge(get_hhkerb_reu_ton_la(), how='left', on='Authority')
+    merge['sum_dry_rec_y'] = merge['sum_dry_rec_y'].replace(np.NaN, 0)
+    merge['sum_dry_rec'] = merge['sum_dry_rec_x'] + merge['sum_dry_rec_y']
+    merge = merge.drop(['sum_dry_rec_x', 'sum_dry_rec_y'], axis=1)
+    return merge
 
 def get_hhkerb_rec_ton_drs(df=None):
     if df is None:
@@ -145,13 +163,30 @@ def get_waste_ton_qtr(df=None):
     waste_ton_wide = waste_ton_wide.reset_index()
     return waste_ton_wide
 
+def get_hhkerb_rej_ton_la(df=None):
+    if df is None:
+        df = get_data()
+    hhkerb_rec = df[df.QuestionNumber == 'Q010']
+    hhkerb_rej_ton = hhkerb_rec[(hhkerb_rec.ColText == 'Tonnage collected for recycling but actually rejected/disposed') 
+               & (hhkerb_rec.Data > 0)]
+    hhkerb_rej_ton_la = hhkerb_rej_ton.groupby('Authority').agg(np.sum)
+    hhkerb_rej_ton_la = hhkerb_rej_ton_la.reset_index()
+    hhkerb_rej_ton_la = hhkerb_rej_ton_la.drop(['Period','QuestionNumber','QuText','RowText',
+                                                        'ColText','MaterialGroup'],axis=1)
+    return hhkerb_rej_ton_la
+
 def get_hhkerb_waste_ton_la(df=None):
     if df is None:
         df = get_waste_ton_qtr()
     hhkerb_waste_ton = df[['Authority','Period','Collected household waste : Regular Collection']]
     hhkerb_waste_ton_agg = hhkerb_waste_ton.groupby('Authority').agg(np.sum)
     hhkerb_waste_ton_agg = hhkerb_waste_ton_agg.reset_index()
-    return hhkerb_waste_ton_agg
+    merge = hhkerb_waste_ton_agg.merge(get_hhkerb_rej_ton_la(), how='left', on='Authority')
+    merge['Data'] = merge['Data'].replace(np.NaN, 0)
+    merge['Collected household waste : Regular Collection'] = (merge['Collected household waste : Regular Collection'] 
+                                                               + merge['Data'])
+    merge.drop(['Data'],axis=1)
+    return merge
 
 def get_hhkerb_waste_ton_drs(df=None):
     if df is None:
