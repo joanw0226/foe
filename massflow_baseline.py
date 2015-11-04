@@ -35,39 +35,28 @@ Household Kerbside Recycling
 
 """
 
-def get_hhkerb_rec_ton_qtr(df=None):
-    if df is None:
-        df = get_data()
-    hhkerb_rec = df[df.QuestionNumber == 'Q010']
-    hhkerb_rec_ton = hhkerb_rec.groupby('ColText').get_group('Tonnage collected for recycling')
-    hhkerb_rec_ton_qtr = hhkerb_rec_ton.pivot_table(values='Data', index=['Authority','Period'],
-                                         columns='RowText', aggfunc = lambda x: x)
-    hhkerb_rec_ton_qtr = hhkerb_rec_ton_qtr.reset_index()
+def get_hhkerb_rec_qtr():
+    raw = get_data()
+    hhkerb_rec = raw[(raw.QuestionNumber == 'Q010') & (raw.ColText == 'Tonnage collected for recycling')]
+    hhkerb_rec_qtr = hhkerb_rec_ton.pivot_table(values='Data', index=['Authority','Period'],
+                                         columns='RowText', aggfunc = lambda x: x).reset_index()
     return hhkerb_rec_ton_qtr
 
-def get_hhkerb_reu_ton_la(df=None):
-    if df is None:
-        df = get_data()
-    hhkerb_rec = df[df.QuestionNumber == 'Q010']
-    hhkerb_reu_ton = hhkerb_rec.groupby('ColText').get_group('Tonnage Collected for Reuse')
-    hhkerb_reu_ton_qtr = hhkerb_reu_ton.pivot_table(values='Data', index=['Authority','Period'],
-                                         columns='RowText', aggfunc = lambda x: x)
-    hhkerb_reu_ton_qtr = hhkerb_reu_ton_qtr.reset_index()
-    hhkerb_reu_ton_all = hhkerb_reu_ton_qtr.groupby('Authority').agg(np.sum)
-    hhkerb_reu_ton_all = hhkerb_reu_ton_all.reset_index()
-    hhkerb_reu_ton_all['sum_dry_rec'] = hhkerb_reu_ton_all.sum(axis=1)
-    hhkerb_reu_ton_la = hhkerb_reu_ton_all[['Authority','sum_dry_rec']]
+def get_hhkerb_reu_la():
+    raw = get_data()
+    hhkerb_reu = raw[(raw.QuestionNumber == 'Q010') & (raw.ColText == 'Tonnage Collected for Reuse') & (raw.Data > 0)]
+    #It has been verified that all the materials selected above do not contain garden waste, etc.
+    hhkerb_reu_la = (hhkerb_reu.groupby('Authority')['Data'].sum().to_frame().reset_index()
+                         .rename(columns={'Data':'sum_dry_rec'}))
     return hhkerb_reu_ton_la
 
-def get_hhkerb_rec_ton_la(df=None):
-    if df is None:
-        df = get_hhkerb_rec_ton_qtr()
-    hhkerb_rec_ton_all = df.groupby('Authority').agg(np.sum)
-    hhkerb_rec_ton_all = hhkerb_rec_ton_all.reset_index()
-    hhkerb_rec_ton_all = hhkerb_rec_ton_all.drop(['Green garden waste only','Mixed garden and food waste',
-                                              'Waste food only'],axis=1)
+def get_hhkerb_rec_la():
+    hhkerb_rec_qtr = get_hhkerb_rec_qtr()
+    hhkerb_rec_la = hhkerb_rec_qtr.groupby('Authority').agg(np.sum).reset_index().drop(['Green garden waste only',
+                                                                                     'Mixed garden and food waste',
+                                                                                     'Waste food only'],axis=1)
     #Generate the sum of recycling materials (for most LAs with co-mingled recycling, it is just from 'Co mingled materials')
-    hhkerb_rec_ton_all['sum_dry_rec'] = hhkerb_rec_ton_all.sum(axis=1)
+    hhkerb_rec_la['sum_dry_rec'] = hhkerb_rec_la.sum(axis=1)
     hhkerb_rec_ton_agg = hhkerb_rec_ton_all.drop(['Absorbent Hygiene Products (AHP)','Car tyres',
                                                 'Card','Gas bottles','Large vehicle tyres',
                                                 'Mixed paper &  card','Other Scrap metal',
