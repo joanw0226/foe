@@ -150,14 +150,14 @@ Household Kerbside Waste
 
 """
 
-def get_hhkerb_waste_qtr():
+def get_hhkerb_res_qtr():
     raw = get_data()
-    waste = (raw[(raw.QuestionNumber == 'Q023') & (raw.ColText == 'Tonnage')]
+    hhkerb_res = (raw[(raw.QuestionNumber == 'Q023') & (raw.ColText == 'Tonnage')]
              .pivot_table(values='Data', index=['Authority','Period'],
                           columns='RowText', aggfunc = lambda x: x)
              .reset_index())
-    hhkerb_waste_qtr = waste[['Authority','Period','Collected household waste : Regular Collection']]
-    return hhkerb_waste_qtr
+    hhkerb_res_qtr = hhkerb_res[['Authority','Period','Collected household waste : Regular Collection']]
+    return hhkerb_res_qtr
 
 def get_hhkerb_rej_la():
     raw = get_data()
@@ -169,37 +169,61 @@ def get_hhkerb_rej_la():
                             'ColText','MaterialGroup'],axis=1))
     return hhkerb_rej_la
 
-def get_hhkerb_waste_la():
-    hhkerb_waste_qtr = get_hhkerb_waste_qtr()
-    hhkerb_waste_la = hhkerb_waste_qtr.groupby('Authority').agg(np.sum).reset_index()
+def get_hhkerb_res_la():
+    hhkerb_res_qtr = get_hhkerb_res_qtr()
+    hhkerb_res_la = hhkerb_res_qtr.groupby('Authority').agg(np.sum).reset_index()
     #Merge in rejected recycling (hhkerb_rej_la)
-    merge = hhkerb_waste_la.merge(get_hhkerb_rej_la(), how='left', on='Authority')
+    merge = hhkerb_res_la.merge(get_hhkerb_rej_la(), how='left', on='Authority')
     merge['Data'] = merge['Data'].replace(np.NaN, 0)
     merge['Collected household waste : Regular Collection'] = (merge['Collected household waste : Regular Collection'] + merge['Data'])
-    merge.drop(['Data'],axis=1)
+    merge = merge.drop(['Data'],axis=1)
     return merge
 
-def get_hhkerb_waste_drs():
-    hhkerb_waste_la = get_hhkerb_waste_la()
-    hhkerb_waste_drs = pd.DataFrame(columns=['Authority','DRS Glass Bottles',
+def get_hhkerb_res_drs():
+    hhkerb_res_la = get_hhkerb_res_la()
+    hhkerb_res_drs = pd.DataFrame(columns=['Authority','DRS Glass Bottles',
                                              'DRS Plastic Bottles','DRS Ferrous Cans',
                                              'DRS Aluminium Cans','DRS Beverage Cartons'])
-    hhkerb_waste_drs['Authority'] = hhkerb_waste_la['Authority']
-    hhkerb_waste_drs['DRS Glass Bottles'] = hhkerb_waste_la['Collected household waste : Regular Collection']*0.0204
-    hhkerb_waste_drs['DRS Plastic Bottles'] = hhkerb_waste_la['Collected household waste : Regular Collection']*0.0151
-    hhkerb_waste_drs['DRS Ferrous Cans'] = hhkerb_waste_la['Collected household waste : Regular Collection']*0.001554
-    hhkerb_waste_drs['DRS Aluminium Cans'] = (hhkerb_waste_la['Collected household waste : Regular Collection']*0.003255)
-    hhkerb_waste_drs['DRS Beverage Cartons'] = (hhkerb_waste_la['Collected household waste : Regular Collection']*0.0037)
-    hhkerb_waste_drs.to_csv(op.join(data_dir, ('hhkerb_waste_drs_'
+    hhkerb_res_drs['Authority'] = hhkerb_res_la['Authority']
+    hhkerb_res_drs['DRS Glass Bottles'] = hhkerb_res_la['Collected household waste : Regular Collection']*0.0204
+    hhkerb_res_drs['DRS Plastic Bottles'] = hhkerb_res_la['Collected household waste : Regular Collection']*0.0151
+    hhkerb_res_drs['DRS Ferrous Cans'] = hhkerb_res_la['Collected household waste : Regular Collection']*0.001554
+    hhkerb_res_drs['DRS Aluminium Cans'] = (hhkerb_res_la['Collected household waste : Regular Collection']*0.003255)
+    hhkerb_res_drs['DRS Beverage Cartons'] = (hhkerb_res_la['Collected household waste : Regular Collection']*0.0037)
+    hhkerb_res_drs.to_csv(op.join(data_dir, ('hhkerb_res_drs_'
                                                + dt.datetime.today().strftime("%d%m")
                                                + '.csv')), 
                             encodings = 'utf-8')
-    return hhkerb_waste_drs
+    return hhkerb_res_drs
 
 """
 HWRCs Recycling
 
 """
+
+def get_hwrcs_reu_la():
+    raw = get_data()
+    #Get reuse data from CA sites (Question 16)
+    hwrcs_reu_ca = raw[(raw.QuestionNumber == 'Q016') & 
+                     (raw.ColText == 'Tonnage collected for reuse') & 
+                     (raw.Data > 0)]
+    #It has been verified that all the materials selected above can be added to sum_dry_rec
+    hwrcs_reu_ca_la = (hwrcs_reu_ca.groupby('Authority')['Data'].agg(np.sum).to_frame().reset_index()
+                         .rename(columns={'Data':'sum_dry_rec'}))
+    
+    #Get reuse data from bring sites (Question 17)
+    hwrcs_reu_bring = raw[(raw.QuestionNumber == 'Q017') & 
+                     (raw.ColText == 'Tonnage collected for reuse') & 
+                     (raw.Data > 0)]
+    #It has been verified that all the materials selected above can be added to sum_dry_rec
+    hwrcs_reu_bring_la = (hwrcs_reu_bring.groupby('Authority')['Data'].agg(np.sum).to_frame().reset_index()
+                         .rename(columns={'Data':'sum_dry_rec'}))
+    #Combine the two dataframes (add up reuse data for each LA)
+    merge = hwrcs_reu_ca_la.merge(hwrcs_reu_bring_la, how='outer', on='Authority')
+    merge = merge.replace(np.NaN, 0)
+    merge['sum_dry_rec'] = merge['sum_dry_rec_x'] + merge['sum_dry_rec_y']
+    merge = merge.drop(['sum_dry_rec_x','sum_dry_rec_y'],axis=1)
+    return merge
 
 def get_hwrcs_rec_la():
     drslist = ['Authority','Brown glass','Clear glass','Green glass','Mixed glass',
@@ -241,8 +265,66 @@ def get_hwrcs_rec_la():
     #Add values of Question 16 and Question 17 together
     merge = (hwrcs_rec_ca_la + hwrcs_rec_bring_la)
     merge['Authority'] = hwrcs_rec_bring_la['Authority']
+    
+    #Merge in reuse data from get_hwrcs_reu_la()
+    merge = merge.merge(get_hwrcs_reu_la(), how='left', on='Authority')
+    merge = merge.replace(np.NaN, 0)
+    merge['sum_dry_rec'] = merge['sum_dry_rec_x'] + merge['sum_dry_rec_y']
+    merge = merge.drop(['sum_dry_rec_x','sum_dry_rec_y'],axis=1)
     return merge
 
+"""
+HWRCs Residual
+
+"""
+
+def get_hwrcs_res_qtr():
+    raw = get_data()
+    hwrcs_res = (raw[(raw.QuestionNumber == 'Q023') & (raw.ColText == 'Tonnage')]
+             .pivot_table(values='Data', index=['Authority','Period'],
+                          columns='RowText', aggfunc = lambda x: x)
+             .reset_index())
+    hwrcs_res_qtr = hwrcs_res[['Authority','Period','Civic amenity sites waste : Household']]
+    return hwrcs_res_qtr
+
+def get_hwrcs_rej_la():
+    raw = get_data()
+    #The only data of rejected materials is Tonnage collected for recycling but actually rejected / disposed
+    #for Question 16
+    hwrcs_rej_ca_qtr = raw[(raw.QuestionNumber == 'Q016') & 
+                     (raw.ColText == 'Tonnage collected for recycling but actually rejected / disposed')&
+                     (raw.Data > 0)]
+    hwrcs_rej_la = (hwrcs_rej_ca_qtr.groupby('Authority').agg(np.sum).reset_index()
+                     .drop(['Period','QuestionNumber','QuText','RowText',
+                            'ColText','MaterialGroup'],axis=1))
+    return hwrcs_rej_la
+
+def get_hwrcs_res_la():
+    hwrcs_res_qtr = get_hwrcs_res_qtr()
+    hwrcs_res_la = hwrcs_res_qtr.groupby('Authority').agg(np.sum).reset_index()
+    #Merge in rejected recycling (hwrcs_rej_la)
+    merge = hwrcs_res_la.merge(get_hwrcs_rej_la(), how='left', on='Authority')
+    merge['Data'] = merge['Data'].replace(np.NaN, 0)
+    merge['Civic amenity sites waste : Household'] = (merge['Civic amenity sites waste : Household'] + merge['Data'])
+    merge = merge.drop(['Data'],axis=1)    
+    return merge
+
+def get_hwrcs_res_drs():
+    hwrcs_res_la = get_hwrcs_res_la()
+    hwrcs_res_drs = pd.DataFrame(columns=['Authority','DRS Glass Bottles',
+                                             'DRS Plastic Bottles','DRS Ferrous Cans',
+                                             'DRS Aluminium Cans','DRS Beverage Cartons'])
+    hwrcs_res_drs['Authority'] = hwrcs_res_la['Authority']
+    hwrcs_res_drs['DRS Glass Bottles'] = hwrcs_res_la['Civic amenity sites waste : Household']*0.011665
+    hwrcs_res_drs['DRS Plastic Bottles'] = hwrcs_res_la['Civic amenity sites waste : Household']*0.0066
+    hwrcs_res_drs['DRS Ferrous Cans'] = hwrcs_res_la['Civic amenity sites waste : Household']*0.001824
+    hwrcs_res_drs['DRS Aluminium Cans'] = hwrcs_res_la['Civic amenity sites waste : Household']*0.00248
+    hwrcs_res_drs['DRS Beverage Cartons'] = hwrcs_res_la['Civic amenity sites waste : Household']*0.0007
+    hwrcs_res_drs.to_csv(op.join(data_dir, ('hwrcs_res_drs_'
+                                               + dt.datetime.today().strftime("%d%m")
+                                               + '.csv')), 
+                            encodings = 'utf-8')
+    return hwrcs_res_drs
 
 """
 Mass flow baseline master function
@@ -251,10 +333,15 @@ Mass flow baseline master function
 def get_massflow_baseline():
     hhkerb_rec_sum = (get_hhkerb_rec_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
                           .rename(columns={0: 'Household Kerbside Recycling'}))
-    hhkerb_waste_sum = (get_hhkerb_waste_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
+    hhkerb_res_sum = (get_hhkerb_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
                             .rename(columns={0: 'Household Kerbside Residual'}))
-    baseline = (hhkerb_rec_sum.merge(hhkerb_waste_sum, right_index=True, left_index=True)
+    hwrcs_res_sum = (get_hwrcs_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
+                            .rename(columns={0: 'HWRCs Residual'}))
+    
+    #Merge everything in
+    baseline = (hhkerb_rec_sum.merge(hhkerb_res_sum, right_index=True, left_index=True)
                 .reset_index().rename(columns={'RowText': 'Authority'}))
+    baseline = baseline.merge(hwrcs_res_sum, left_on= 'Authority', right_index=True)
     baseline.to_csv(op.join(data_dir, ('massflow_baseline_' 
                                        + dt.datetime.today().strftime("%d%m")
                                        + '.csv')), 
