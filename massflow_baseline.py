@@ -134,9 +134,8 @@ def get_hhkerb_rec_drs():
     #For the rest, use WRAP rate of 0.31% on the sum of dry recycling
     hhkerb_rec_drs['DRS Beverage Cartons'] = (hhkerb_rec_drs['DRS Beverage Cartons']
                                                .replace(np.NaN, hhkerb_rec_drs['sum_dry_rec']*0.0031))
-    hhkerb_rec_drs.drop(['Aluminium cans','Co mingled materials','Composite food and beverage cartons',
-                         'Mixed Plastic Bottles','Mixed cans','Mixed glass','Plastics',
-                         'Steel cans','sum_dry_rec'],axis =1, inplace = True)
+    hhkerb_rec_drs = hhkerb_rec_drs[['Authority','DRS Glass Bottles','DRS Plastic Bottles',
+                                     'DRS Ferrous Cans','DRS Aluminium Cans','DRS Beverage Cartons']]
     
     #Export to .csv
     hhkerb_rec_drs.to_csv(op.join(data_dir,('hhkerb_rec_drs_'
@@ -271,7 +270,73 @@ def get_hwrcs_rec_la():
     merge = merge.replace(np.NaN, 0)
     merge['sum_dry_rec'] = merge['sum_dry_rec_x'] + merge['sum_dry_rec_y']
     merge = merge.drop(['sum_dry_rec_x','sum_dry_rec_y'],axis=1)
+    merge.to_csv(op.join(data_dir, ('hwrcs_rec_la_'
+                                    + dt.datetime.today().strftime("%d%m")+ '.csv')),
+                 encodings = 'utf-8')
     return merge
+
+def get_hwrcs_rec_drs():
+    hwrcs_rec_la = get_hwrcs_rec_la()
+    hwrcs_rec_drs = hwrcs_rec_la
+    
+    #DRS Glass Bottles (derived from 'Brown glass','Clear glass','Green glass',
+    #'Mixed glass', or 'sum_dry_rec')
+    #ZWS rate for 'Mixed glass' is 75%, 35% for 'Clear glass', and 100% for the rest
+    hwrcs_rec_drs['DRS Glass Bottles'] = (hwrcs_rec_drs['Mixed glass']*.75 
+                                          + hwrcs_rec_drs['Clear glass']*.35
+                                          + hwrcs_rec_drs['Brown glass'] 
+                                          + hwrcs_rec_drs['Green glass'])
+    #Using co-mingled materials, WRAP MRF rate is ?????
+    hwrcs_rec_drs['DRS Glass Bottles'] = (hwrcs_rec_drs['DRS Glass Bottles']
+                                            .replace(0, 
+                                                     hwrcs_rec_drs['sum_dry_rec']*0))
+    
+    #DRS Plastic Bottles (derived from 'Mixed Plastic Bottles', 'Plastics', or 'sum_dry_rec')
+    #Use data from 'Mixed Plastic Bottles'. If unavailable, use data from 'Plastics'
+    #'Mixed Plastic Bottles' are treated as 100% DRS, and ZWS rate for 'Plastics' is 50%
+    #hwrcs_rec_drs['DRS Plastic Bottles'] = (hwrcs_rec_drs['Mixed Plastic Bottles'] 
+    #                                        + hwrcs_rec_drs['Plastics']*.5)
+    hwrcs_rec_drs['DRS Plastic Bottles'] = hwrcs_rec_drs['Mixed Plastic Bottles']
+    hwrcs_rec_drs['DRS Plastic Bottles'] = (hwrcs_rec_drs['DRS Plastic Bottles']
+                                            .replace(0,hwrcs_rec_drs['Plastics']*.5))
+    
+    #For LAs with co-mingled materials, WRAP rate is ???
+    hwrcs_rec_drs['DRS Plastic Bottles'] = (hwrcs_rec_drs['DRS Plastic Bottles']
+                                             .replace(0,hwrcs_rec_drs['sum_dry_rec']*0))
+    
+    #DRS Ferrous Cans & DRS Aluminium Cans
+    #If 'Steel cans' or 'Aluminium cans' exists, use that info
+    hwrcs_rec_drs['DRS Ferrous Cans'] = hwrcs_rec_drs['Steel cans']
+    hwrcs_rec_drs['DRS Aluminium Cans'] = hwrcs_rec_drs['Aluminium cans']
+    #Use 'Mixed cans' if 'Steel cans' or 'Aluminium cans' don't exist
+    #ZWS rates: 20% is aluminium, 80% is ferrous
+    hwrcs_rec_drs['DRS Ferrous Cans'] = (hwrcs_rec_drs['DRS Ferrous Cans']
+                                         .replace(0,hwrcs_rec_drs['Mixed cans']*.8))
+    #If none of the above exists, use sum of dry recycling, with WRAP MRF rate being ???
+    hwrcs_rec_drs['DRS Ferrous Cans'] = (hwrcs_rec_drs['DRS Ferrous Cans']
+                                         .replace(0,hwrcs_rec_drs['sum_dry_rec']*0))
+    #Use 'Mixed cans' if 'Steel cans' or 'Aluminium cans' don't exist
+    hwrcs_rec_drs['DRS Aluminium Cans'] = (hwrcs_rec_drs['DRS Aluminium Cans']
+                                           .replace(0,hwrcs_rec_drs['Mixed cans']*.2))
+    #If none of the above exists, use sum of dry recycling, with WRAP MRF rate being ???    
+    hwrcs_rec_drs['DRS Aluminium Cans'] = (hwrcs_rec_drs['DRS Aluminium Cans']
+                                            .replace(0,hwrcs_rec_drs['sum_dry_rec']*0))
+
+    #DRS Beverage Cartons
+    #For LAs with info on beverage cartons, use the specific data
+    hwrcs_rec_drs['DRS Beverage Cartons'] = hwrcs_rec_drs['Composite food and beverage cartons']
+    #For the rest, use WRAP MRS rate of ??? on the sum of dry recycling
+    hwrcs_rec_drs['DRS Beverage Cartons'] = (hwrcs_rec_drs['DRS Beverage Cartons']
+                                               .replace(0, hwrcs_rec_drs['sum_dry_rec']*0))
+    hwrcs_rec_drs = hwrcs_rec_drs[['Authority','DRS Glass Bottles','DRS Plastic Bottles',
+                                     'DRS Ferrous Cans','DRS Aluminium Cans','DRS Beverage Cartons']]
+    
+    #Export to .csv
+    hwrcs_rec_drs.to_csv(op.join(data_dir,('hwrcs_rec_drs_'
+                                            + dt.datetime.today().strftime("%d%m")
+                                            + '.csv')), 
+                          encodings = 'utf-8')
+    return hwrcs_rec_drs
 
 """
 HWRCs Residual
@@ -335,13 +400,18 @@ def get_massflow_baseline():
                           .rename(columns={0: 'Household Kerbside Recycling'}))
     hhkerb_res_sum = (get_hhkerb_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
                             .rename(columns={0: 'Household Kerbside Residual'}))
+    hwrcs_rec_sum = (get_hwrcs_rec_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
+                            .rename(columns={0: 'HWRCs Recycling'}))
     hwrcs_res_sum = (get_hwrcs_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
                             .rename(columns={0: 'HWRCs Residual'}))
     
     #Merge everything in
     baseline = (hhkerb_rec_sum.merge(hhkerb_res_sum, right_index=True, left_index=True)
                 .reset_index().rename(columns={'RowText': 'Authority'}))
+    baseline = baseline.merge(hwrcs_rec_sum, left_on= 'Authority', right_index=True)
     baseline = baseline.merge(hwrcs_res_sum, left_on= 'Authority', right_index=True)
+    
+    #Export to .csv
     baseline.to_csv(op.join(data_dir, ('massflow_baseline_' 
                                        + dt.datetime.today().strftime("%d%m")
                                        + '.csv')), 
