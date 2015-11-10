@@ -145,17 +145,17 @@ def get_hhkerb_rec_drs():
     return hhkerb_rec_drs
 
 """
-Household Kerbside Waste
+Household Kerbside Residual Waste
 
 """
 
 def get_hhkerb_res_qtr():
     raw = get_data()
-    hhkerb_res = (raw[(raw.QuestionNumber == 'Q023') & (raw.ColText == 'Tonnage')]
+    res = (raw[(raw.QuestionNumber == 'Q023') & (raw.ColText == 'Tonnage')]
              .pivot_table(values='Data', index=['Authority','Period'],
                           columns='RowText', aggfunc = lambda x: x)
              .reset_index())
-    hhkerb_res_qtr = hhkerb_res[['Authority','Period','Collected household waste : Regular Collection']]
+    hhkerb_res_qtr = res[['Authority','Period','Collected household waste : Regular Collection']]
     return hhkerb_res_qtr
 
 def get_hhkerb_rej_la():
@@ -339,17 +339,17 @@ def get_hwrcs_rec_drs():
     return hwrcs_rec_drs
 
 """
-HWRCs Residual
+HWRCs Residual Waste
 
 """
 
 def get_hwrcs_res_qtr():
     raw = get_data()
-    hwrcs_res = (raw[(raw.QuestionNumber == 'Q023') & (raw.ColText == 'Tonnage')]
+    res = (raw[(raw.QuestionNumber == 'Q023') & (raw.ColText == 'Tonnage')]
              .pivot_table(values='Data', index=['Authority','Period'],
                           columns='RowText', aggfunc = lambda x: x)
              .reset_index())
-    hwrcs_res_qtr = hwrcs_res[['Authority','Period','Civic amenity sites waste : Household']]
+    hwrcs_res_qtr = res[['Authority','Period','Civic amenity sites waste : Household']]
     return hwrcs_res_qtr
 
 def get_hwrcs_rej_la():
@@ -390,6 +390,22 @@ def get_hwrcs_res_drs():
                                                + '.csv')), 
                             encodings = 'utf-8')
     return hwrcs_res_drs
+
+"""
+Commerical Residual
+
+"""
+
+def get_com_res_qtr():
+    raw = get_data()
+    res = (raw[(raw.QuestionNumber == 'Q023') & (raw.ColText == 'Tonnage')]
+             .pivot_table(values='Data', index=['Authority','Period'],
+                          columns='RowText', aggfunc = lambda x: x)
+             .reset_index())
+    com_res_qtr = res[['Authority','Period','Collected non-household waste : Commercial & Industrial']]
+    return com_res_qtr
+
+
 
 """
 Mass flow baseline master function
