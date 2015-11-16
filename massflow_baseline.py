@@ -405,6 +405,21 @@ def get_com_res_qtr():
     com_res_qtr = res[['Authority','Period','Collected non-household waste : Commercial & Industrial']]
     return com_res_qtr
 
+"""
+Litter Recycling
+
+"""
+#There is no data for 'Tonnage collected for reuse'
+#There is minimal data for Street Recycling Bins
+#Consider combining both
+
+
+"""
+Litter Residual
+
+"""
+#There is no data for 'Tonnage collected for recycling but actually rejected/disposed'
+#from Street Recycling Bins (Q034), so the only Litter Residual is from Q023 
 
 
 """
@@ -413,20 +428,36 @@ Mass flow baseline master function
 """
 def get_massflow_baseline():
     hhkerb_rec_sum = (get_hhkerb_rec_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
-                          .rename(columns={0: 'Household Kerbside Recycling'}))
+                      .reset_index().rename(columns={'RowText': 'DRS Materials',
+                                                     0: 'Household Kerbside Recycling'}))
     hhkerb_res_sum = (get_hhkerb_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
-                            .rename(columns={0: 'Household Kerbside Residual'}))
+                      .reset_index().rename(columns={'index': 'DRS Materials',
+                                                     0: 'Household Kerbside Residual'}))
     hwrcs_rec_sum = (get_hwrcs_rec_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
-                            .rename(columns={0: 'HWRCs Recycling'}))
+                     .reset_index().rename(columns={'RowText': 'DRS Materials',0: 'HWRCs Recycling'}))
     hwrcs_res_sum = (get_hwrcs_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
-                            .rename(columns={0: 'HWRCs Residual'}))
+                     .reset_index().rename(columns={'index': 'DRS Materials',0: 'HWRCs Residual'}))
     
     #Merge everything in
-    baseline = (hhkerb_rec_sum.merge(hhkerb_res_sum, right_index=True, left_index=True)
-                .reset_index().rename(columns={'RowText': 'Authority'}))
-    baseline = baseline.merge(hwrcs_rec_sum, left_on= 'Authority', right_index=True)
-    baseline = baseline.merge(hwrcs_res_sum, left_on= 'Authority', right_index=True)
-    
+    drs_list = ['DRS Glass Bottles','DRS Plastic Bottles','DRS Ferrous Cans','DRS Aluminium Cans',
+                'DRS Beverage Cartons','Total']
+    scot_vol_list = [165, 39, 5, 9, 5, 222]
+    baseline = pd.DataFrame(data={'DRS Materials':drs_list,
+                                  'Total Volume in Thousand Tonnes':scot_vol_list})
+    baseline['Total Volume in Thousand Tonnes'] = baseline['Total Volume in Thousand Tonnes']*.578
+    baseline = baseline.merge(hhkerb_rec_sum, how = 'left', on='DRS Materials')
+    baseline = baseline.merge(hhkerb_res_sum, how = 'left', on='DRS Materials')
+    baseline = baseline.merge(hwrcs_rec_sum, how = 'left', on='DRS Materials')
+    baseline = baseline.merge(hwrcs_res_sum, how = 'left', on='DRS Materials')
+    #Calculate the rest of the measures
+    baseline['Remains in Environment'] = baseline['Total Volume in Thousand Tonnes']*.01
+    baseline = baseline.replace(np.NaN, 0)
+    stream_list = ['Household Kerbside Recycling','Household Kerbside Residual',
+                   'HWRCs Recycling','HWRCs Residual']
+    for stream in stream_list:
+        baseline[stream] = np.where(baseline['DRS Materials']=='Total',
+                                                        sum(baseline[stream]),
+                                                        baseline[stream])
     #Export to .csv
     baseline.to_csv(op.join(data_dir, ('massflow_baseline_' 
                                        + dt.datetime.today().strftime("%d%m")
