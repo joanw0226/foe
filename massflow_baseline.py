@@ -30,6 +30,13 @@ def get_data():
     raw = raw[raw.Period != 'Jan 14 - Mar 14']
     return raw
 
+def get_pop():
+    raw = get_data()
+    pop_qtr = raw[(raw.QuestionNumber == 'Q001') & (raw.RowText == 'Population of Authority')]
+    pop_la = pop_qtr[['Authority','Data']].drop_duplicates().rename(columns={'Data':'Population'})
+    pop_la = pop_la.sort('Authority').reset_index().drop('index', axis=1)
+    return pop_la
+
 """
 Household Kerbside Recycling
 
@@ -392,18 +399,128 @@ def get_hwrcs_res_drs():
     return hwrcs_res_drs
 
 """
+Commerical Recycling
+
+"""
+#Since there are no composition rates for comingled materials, the measure "sum of dry recycling" 
+#does not come into play. Thus, do not need to consider "Tonnage for reuse" (irrelevant to DRS)
+
+#Note, for some rates, use ZWS's rates for HWRCs (e.g. 75% Mixed glass is DRS, 50% Plastics is DRS)
+
+def get_com_rec_qtr():
+    raw = get_data()
+    com_rec = raw[(raw.QuestionNumber == 'Q011') &
+                  (raw.ColText == 'Tonnage collected for recycling')]
+    com_rec_qtr = com_rec.pivot_table(values='Data', index=['Authority','Period'],
+                                      columns='RowText', aggfunc = lambda x: x).reset_index()
+    return com_rec_qtr
+
+def get_com_rec_la():
+    com_rec_la = (get_com_rec_qtr().groupby('Authority').agg(np.sum).reset_index()
+                  .drop(['Green garden waste only','Waste food only'],axis=1))
+    #Do not need to generate the sum of recycling materials, 
+    #nor necessary to include 'Co mingled materials'
+    #Note that DRS Beverage Cartons will be generated based on figures from Commercial Residual
+    com_rec_la = com_rec_la[['Authority','Mixed glass','Mixed Plastic Bottles',
+                             'Plastics','Mixed cans']]
+    return com_rec_la
+
+def get_com_rec_drs():
+    #Merge in population for interpolation of missing values
+    merge = get_pop().merge(get_com_rec_la(), how='left',on='Authority')
+    #For each material, calculate material mass per population from available data, and pick median
+    #For LAs with missing data, multiply the median rate and LA's population 
+    #to get estimated material mass
+    drs_list = ['Mixed glass','Mixed Plastic Bottles','Plastics','Mixed cans']
+    for drs in drs_list:
+        merge['Estimated ' + drs] = merge['Population']*((merge[drs]/merge['Population']).median())
+        merge['Combined ' + drs] = merge[drs].replace(np.NaN, merge['Estimated ' +  drs])
+    
+    #Initialise dataframe com_rec_drs
+    com_rec_drs = pd.DataFrame(columns=['Authority','DRS Glass Bottles',
+                                        'DRS Plastic Bottles','DRS Ferrous Cans',
+                                        'DRS Aluminium Cans','DRS Beverage Cartons'])
+    com_rec_drs['Authority'] = merge['Authority']
+
+    #For DRS Glass Bottles, use 'Combined Mixed glass' (from raw and estimated data)
+    #For now, use ZWS rate for HWRC 'Mixed glass': 75%
+    com_rec_drs['DRS Glass Bottles'] = merge['Combined Mixed glass']*.75
+    
+    #For DRS Plastic Bottles, use 'Mixed Plastic Bottles' or 'Plastics', or respectively estimated data
+    #'Mixed Plastic Bottles' are treated as 100% DRS, and HWRCs ZWS rate for 'Plastics' is 50%
+    com_rec_drs['DRS Plastic Bottles'] = merge['Mixed Plastic Bottles']
+    com_rec_drs['DRS Plastic Bottles'] = (com_rec_drs['DRS Plastic Bottles']
+                                            .replace(np.NaN, merge['Plastics']*.5))
+    com_rec_drs['DRS Plastic Bottles'] = (com_rec_drs['DRS Plastic Bottles']
+                                            .replace(np.NaN, merge['Estimated Plastics']*.5))
+        
+    #For DRS Ferrous Cans & DRS Aluminium Cans, use 'Mixed cans' or its estimated data
+    #ZWS rates: 20% is aluminium, 80% is ferrous
+    com_rec_drs['DRS Ferrous Cans'] = merge['Combined Mixed cans']*.8
+    com_rec_drs['DRS Aluminium Cans'] = merge['Combined Mixed cans']*.2
+    
+    #For DRS Beverage Cartons, use ZWS estimated recycling rate of 30% and com_res_drs to interpolate
+    #First, get com_res_drs
+    com_res_drs = get_com_res_drs()
+    #For each LA, calculate: DRS Beverage Cartons from com_res_drs multiplied by 30%/70%
+    com_rec_drs['DRS Beverage Cartons'] = com_res_drs['DRS Beverage Cartons']*(.3/.7)
+    
+    com_rec_drs.to_csv(op.join(data_dir, ('com_rec_drs_' + dt.datetime.today().strftime("%d%m")
+                                          + '.csv')), encodings = 'utf-8')
+    
+    return com_rec_drs
+
+def com_rec_drs_zws():
+    #This is an alternative method to estimate DRS rates (from com_res_drs and recycling rates)
+    com_res_drs = get_com_res_drs()
+    test_com_rec_drs = pd.DataFrame(columns=['Authority','DRS Glass Bottles',
+                                        'DRS Plastic Bottles','DRS Ferrous Cans',
+                                        'DRS Aluminium Cans','DRS Beverage Cartons'])
+    test_com_rec_drs['Authority'] = com_res_drs['Authority']
+    test_com_rec_drs['DRS Glass Bottles'] = com_res_drs['DRS Glass Bottles']*(.6/.4)
+    test_com_rec_drs['DRS Plastic Bottles'] = com_res_drs['DRS Plastic Bottles']*(.3/.7)
+    test_com_rec_drs['DRS Ferrous Cans'] = com_res_drs['DRS Ferrous Cans']*(.4/.6)
+    test_com_rec_drs['DRS Aluminium Cans'] = com_res_drs['DRS Aluminium Cans']*(.4/.6)
+    test_com_rec_drs['DRS Beverage Cartons'] = com_res_drs['DRS Beverage Cartons']*(.3/.7)
+    return test_com_rec_drs
+
+"""
 Commerical Residual
 
 """
 
-def get_com_res_qtr():
+def get_com_res_la():
     raw = get_data()
     res = (raw[(raw.QuestionNumber == 'Q023') & (raw.ColText == 'Tonnage')]
-             .pivot_table(values='Data', index=['Authority','Period'],
-                          columns='RowText', aggfunc = lambda x: x)
-             .reset_index())
+           .pivot_table(values='Data', index=['Authority','Period'],
+                        columns='RowText', aggfunc = lambda x: x).reset_index())
     com_res_qtr = res[['Authority','Period','Collected non-household waste : Commercial & Industrial']]
-    return com_res_qtr
+    com_res_la = com_res_qtr.groupby('Authority').agg(np.sum).reset_index()
+    return com_res_la
+
+def get_com_res_drs():
+    com_res_la = get_com_res_la()
+    #Merge in population for interpolation of missing values
+    merge = get_pop().merge(get_com_res_la(), how='left', on='Authority')
+    #Calculate material mass per population from available data, and pick median
+    #For the three LAs with missing data, multiply the median rate and LA's population 
+    #to get estimated material mass
+    drs = 'Collected non-household waste : Commercial & Industrial'
+    merge['Estimated ' + drs] = merge['Population']*((merge[drs]/merge['Population']).median())
+    merge['Combined ' + drs] = merge[drs].replace(np.NaN, merge['Estimated ' +  drs])
+    
+    #Initialise com_res_drs dataframe
+    com_res_drs = pd.DataFrame(columns=['Authority','DRS Glass Bottles',
+                                    'DRS Plastic Bottles','DRS Ferrous Cans',
+                                    'DRS Aluminium Cans','DRS Beverage Cartons'])
+    com_res_drs['Authority'] = merge['Authority']
+    #Aplying ZWS rate: 35% of clear glass is DRS
+    com_res_drs['DRS Glass Bottles'] = merge['Combined ' + drs]*0.0216 
+    com_res_drs['DRS Plastic Bottles'] = merge['Combined ' + drs]*0.0234
+    com_res_drs['DRS Ferrous Cans'] = merge['Combined ' + drs]*0.0068
+    com_res_drs['DRS Aluminium Cans'] = merge['Combined ' + drs]*0.0032
+    com_res_drs['DRS Beverage Cartons'] = merge['Combined ' + drs]*0.0028
+    return com_res_drs
 
 """
 Litter Recycling
@@ -437,23 +554,32 @@ def get_massflow_baseline():
                      .reset_index().rename(columns={'RowText': 'DRS Materials',0: 'HWRCs Recycling'}))
     hwrcs_res_sum = (get_hwrcs_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
                      .reset_index().rename(columns={'index': 'DRS Materials',0: 'HWRCs Residual'}))
+    com_rec_sum = (get_com_rec_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
+                   .reset_index().rename(columns={'index': 'DRS Materials',0: 'Commercial Recycling'}))
+    com_res_sum = (get_com_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
+                   .reset_index().rename(columns={'index': 'DRS Materials',0: 'Commercial Residual'}))
     
     #Merge everything in
     drs_list = ['DRS Glass Bottles','DRS Plastic Bottles','DRS Ferrous Cans','DRS Aluminium Cans',
                 'DRS Beverage Cartons','Total']
     scot_vol_list = [165, 39, 5, 9, 5, 222]
     baseline = pd.DataFrame(data={'DRS Materials':drs_list,
-                                  'Total Volume in Thousand Tonnes':scot_vol_list})
-    baseline['Total Volume in Thousand Tonnes'] = baseline['Total Volume in Thousand Tonnes']*.578
+                                  'Total Mass in Thousand Tonnes':scot_vol_list})
+    baseline['Total Mass in Thousand Tonnes'] = baseline['Total Mass in Thousand Tonnes']*.578
     baseline = baseline.merge(hhkerb_rec_sum, how = 'left', on='DRS Materials')
     baseline = baseline.merge(hhkerb_res_sum, how = 'left', on='DRS Materials')
     baseline = baseline.merge(hwrcs_rec_sum, how = 'left', on='DRS Materials')
     baseline = baseline.merge(hwrcs_res_sum, how = 'left', on='DRS Materials')
+    baseline = baseline.merge(com_rec_sum, how = 'left', on='DRS Materials')
+    baseline = baseline.merge(com_res_sum, how = 'left', on='DRS Materials')
     #Calculate the rest of the measures
-    baseline['Remains in Environment'] = baseline['Total Volume in Thousand Tonnes']*.01
+    #Remains in environment could hopefully be calculated from all other measures, not an estimation
+    baseline['Remains in Environment'] = baseline['Total Mass in Thousand Tonnes']*.01
     baseline = baseline.replace(np.NaN, 0)
+    #Calculate the total from each stream
     stream_list = ['Household Kerbside Recycling','Household Kerbside Residual',
-                   'HWRCs Recycling','HWRCs Residual']
+                   'HWRCs Recycling','HWRCs Residual',
+                   'Commercial Recycling','Commercial Residual']
     for stream in stream_list:
         baseline[stream] = np.where(baseline['DRS Materials']=='Total',
                                                         sum(baseline[stream]),
