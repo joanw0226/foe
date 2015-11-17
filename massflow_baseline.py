@@ -538,6 +538,47 @@ Litter Residual
 #There is no data for 'Tonnage collected for recycling but actually rejected/disposed'
 #from Street Recycling Bins (Q034), so the only Litter Residual is from Q023 
 
+#Litter residual is calculated using the following equation:
+#Street Cleaning (Q023) - Flytipping - Mechanical Sweeping - Bin Litter
+
+def get_lit_res_la():
+    raw = get_data()
+    res = (raw[(raw.QuestionNumber == 'Q023') & (raw.ColText == 'Tonnage')]
+             .pivot_table(values='Data', index=['Authority','Period'],
+                          columns='RowText', aggfunc = lambda x: x).reset_index())
+    #Street Cleaning
+    lit_str_qtr = res[['Authority','Period','Collected household waste : Street Cleaning']]
+    lit_str_la = lit_str_qtr.groupby('Authority').agg(np.sum).reset_index()
+    
+    #Flytipping
+    lit_fly_qtr = res[['Authority','Period','Waste Arising from clearance of fly-tipped materials']]
+    lit_fly_la = lit_fly_qtr.groupby('Authority').agg(np.sum).reset_index()
+
+    #Final calculation for litter 
+    #(based on the WRAP estimation that 50% of Street Cleaning is Mechanical Sweeping)
+    merge = lit_str_la.merge(lit_fly_la, how='left',on='Authority')
+    merge = merge.replace(np.NaN, 0)
+    merge['Litter'] = ((merge['Collected household waste : Street Cleaning']/2) 
+                       - merge['Waste Arising from clearance of fly-tipped materials'])
+    return merge
+
+def get_lit_res_drs():
+    lit_res_la = get_lit_res_la()
+    
+    #Initialise com_res_drs dataframe
+    lit_res_drs = pd.DataFrame(columns=['Authority','DRS Glass Bottles',
+                                    'DRS Plastic Bottles','DRS Ferrous Cans',
+                                    'DRS Aluminium Cans','DRS Beverage Cartons'])
+    lit_res_drs['Authority'] = lit_res_la['Authority']
+    #Aplying ZWS rate: all packaging glass, plastic bottles, metal cans are DRS
+    #Plastic bottle rates could be "PET & HDPE", or "PET, HDPE & other bottles"...
+    #Which one to use? Currently using just "PET & HDPE"
+    lit_res_drs['DRS Glass Bottles'] = lit_res_la['Litter']*0.0688
+    lit_res_drs['DRS Plastic Bottles'] = lit_res_la['Litter']*0.0712
+    lit_res_drs['DRS Ferrous Cans'] = lit_res_la['Litter']*0.0183
+    lit_res_drs['DRS Aluminium Cans'] = lit_res_la['Litter']*0.0369
+    lit_res_drs['DRS Beverage Cartons'] = lit_res_la['Litter']*0.0045
+    return lit_res_drs
 
 """
 Mass flow baseline master function
@@ -558,6 +599,8 @@ def get_massflow_baseline():
                    .reset_index().rename(columns={'index': 'DRS Materials',0: 'Commercial Recycling'}))
     com_res_sum = (get_com_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
                    .reset_index().rename(columns={'index': 'DRS Materials',0: 'Commercial Residual'}))
+    lit_res_sum = (get_lit_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
+                   .reset_index().rename(columns={'index': 'DRS Materials',0: 'Litter Residual'}))
     
     #Merge everything in
     drs_list = ['DRS Glass Bottles','DRS Plastic Bottles','DRS Ferrous Cans','DRS Aluminium Cans',
@@ -572,18 +615,31 @@ def get_massflow_baseline():
     baseline = baseline.merge(hwrcs_res_sum, how = 'left', on='DRS Materials')
     baseline = baseline.merge(com_rec_sum, how = 'left', on='DRS Materials')
     baseline = baseline.merge(com_res_sum, how = 'left', on='DRS Materials')
+    baseline = baseline.merge(lit_res_sum, how = 'left', on='DRS Materials')
+    
     #Calculate the rest of the measures
     #Remains in environment could hopefully be calculated from all other measures, not an estimation
-    baseline['Remains in Environment'] = baseline['Total Mass in Thousand Tonnes']*.01
+    baseline['Remains in Environment (1%)'] = baseline['Total Mass in Thousand Tonnes']*.01
     baseline = baseline.replace(np.NaN, 0)
     #Calculate the total from each stream
     stream_list = ['Household Kerbside Recycling','Household Kerbside Residual',
                    'HWRCs Recycling','HWRCs Residual',
-                   'Commercial Recycling','Commercial Residual']
+                   'Commercial Recycling','Commercial Residual',
+                   'Litter Residual']
     for stream in stream_list:
         baseline[stream] = np.where(baseline['DRS Materials']=='Total',
                                                         sum(baseline[stream]),
                                                         baseline[stream])
+    #Calculate our own estimate of "Remains in Environment"
+    baseline['Remains in Environment (leftover)'] = (baseline['Total Mass in Thousand Tonnes'] 
+                                              - baseline['Household Kerbside Recycling']
+                                              - baseline['Household Kerbside Residual']
+                                              - baseline['HWRCs Recycling']
+                                              - baseline['HWRCs Residual']
+                                              - baseline['Commercial Recycling']
+                                              - baseline['Commercial Residual']
+                                              - baseline['Litter Residual'])
+    
     #Export to .csv
     baseline.to_csv(op.join(data_dir, ('massflow_baseline_' 
                                        + dt.datetime.today().strftime("%d%m")
