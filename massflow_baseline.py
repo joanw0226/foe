@@ -1,13 +1,67 @@
 """ Mass Flow Baseline
+Author: Joan Wang
+Contact: joan20226@gmail.com
+Affiliatoin: Friends of the Earth Cymru
+Date: November 27th, 2015
 
 This module contains functions to quantify
 materials suitable for DRS from the conventional 
 recycling and waste streams. The tonnages of 
 dry recycling and waste data from each local 
-authority are exported from WasteDataFlow,
-for every quarter from January 2014 to march 2015.
+authority over four quarters (April 2014 
+to March 2015) are exported from WasteDataFlow.
 
-Author: Joan Wang
+This module includes functions to complete
+the mass flow baseline of the information 
+described above, and functions that develops
+different mass flows based on different scenarios
+of DRS return rates.
+
+Other supplementary data are from the following:
+The Office of National Statistics - 
+http://www.ons.gov.uk/ons/publications/re-reference-tables.html?edition=tcm%3A77-368259
+Eunomia -
+http://www.eunomia.co.uk/reports-tools/a-scottish-deposit-refund-system/
+WRAP -  
+http://www.wrapcymru.org.uk/content/composition-municipal-solid-waste-wales-0 
+Jemma Bere and colleagues at Keep Wales Tidy
+"""
+
+""" How to use this module:
+
+The following section should be copied and executed in
+an iPython notebook:
+
+import numpy as np 
+import pandas as pd 
+import os.path as op  
+import datetime as dt 
+import time 
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_rows', None)
+data_dir = op.join('data') 
+import massflow_baseline
+
+Note: The default data directory will be 'data', 
+but this can be redefined by the user of the function. 
+For example, if the raw data spreadsheet sits in the 
+directory ./data/foe/drs/ (in relation to current directory) 
+then the data_dir can be changed to 
+data_dir = op.join('data','foe','drs')
+
+Then, any function defined this module can be executed
+in the iPython notebook.
+
+For example, to execute the function that displays the
+mass flow baseline and automatically saves it in an .csv file, 
+execute the following in a command box:
+
+massflow_baseline.get_massflow_baseline()
+
+Note: The first "massflow_baseline" is the name of this module
+The ".get_massflow_baseline()" is calling the function in the module
+
+For more information on the functions, please read the comments attached.
 """
 
 import numpy as np 
@@ -15,14 +69,23 @@ import pandas as pd
 import os.path as op  
 import datetime as dt 
 import time 
-
-# The default data directory will be '../../data' 
-# This can be redefined by the user of the function. 
-data_dir = op.join('data') 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 
+# The default data directory will be 'data' 
+# This can be redefined by the user of the function.
+data_dir = op.join('data') 
+
+""" Import raw data
+
+"""
+
 def get_data():
+    """
+    Input: Excel spreadsheet exported from WasteDataFlow
+    Output: Raw data from WasteDataFlow from April 2014 to March 2015,
+    excluding some irrelevant columns.
+    """
     raw = pd.read_excel(op.join(data_dir, 'raw_jan14-sep15.xls'), 
                         sheetname='NotQ100', header= 1)
     raw = raw.drop(['CollateText','RowOrder','ColOrder','RowIdent',
@@ -31,6 +94,10 @@ def get_data():
     return raw
 
 def get_pop():
+    """
+    Input: Table from get_data()
+    Output: Population for each local authority
+    """
     raw = get_data()
     pop_qtr = raw[(raw.QuestionNumber == 'Q001') & (raw.RowText == 'Population of Authority')]
     pop_la = pop_qtr[['Authority','Data']].drop_duplicates().rename(columns={'Data':'Population'})
