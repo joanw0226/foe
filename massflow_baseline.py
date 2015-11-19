@@ -17,6 +17,9 @@ described above, and functions that develops
 different mass flows based on different scenarios
 of DRS return rates.
 
+Most functions automatically output the resulting 
+dataframe in a CSV file.
+
 Other supplementary data are from the following:
 The Office of National Statistics - 
 http://www.ons.gov.uk/ons/publications/re-reference-tables.html?edition=tcm%3A77-368259
@@ -43,7 +46,7 @@ data_dir = op.join('data')
 import massflow_baseline
 
 Note: The default data directory will be 'data', 
-but this can be redefined by the user of the function. 
+but this can be redefined by the user of this module. 
 For example, if the raw data spreadsheet sits in the 
 directory ./data/foe/drs/ (in relation to current directory) 
 then the data_dir can be changed to 
@@ -71,12 +74,10 @@ import datetime as dt
 import time 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
-
-# The default data directory will be 'data' 
-# This can be redefined by the user of the function.
 data_dir = op.join('data') 
 
-""" Import raw data
+""" 
+Import raw data
 
 """
 
@@ -139,11 +140,11 @@ def get_hhkerb_rec_la():
                                    'Composite food and beverage cartons','Co mingled materials',
                                    'sum_dry_rec']]
     #Add hhkerb_reu_la to hhkerb_rec_la (only some LAs have data for hhkerb_reu_la)
-    merge = hhkerb_rec_la.merge(get_hhkerb_reu_la(), how='left', on='Authority')
-    merge['sum_dry_rec_y'] = merge['sum_dry_rec_y'].replace(np.NaN, 0)
-    merge['sum_dry_rec'] = merge['sum_dry_rec_x'] + merge['sum_dry_rec_y']
-    merge = merge.drop(['sum_dry_rec_x', 'sum_dry_rec_y'], axis=1)
-    return merge
+    #merge = hhkerb_rec_la.merge(get_hhkerb_reu_la(), how='left', on='Authority')
+    #merge['sum_dry_rec_y'] = merge['sum_dry_rec_y'].replace(np.NaN, 0)
+    #merge['sum_dry_rec'] = merge['sum_dry_rec_x'] + merge['sum_dry_rec_y']
+    #merge = merge.drop(['sum_dry_rec_x', 'sum_dry_rec_y'], axis=1)
+    return hhkerb_rec_la
 
 def get_hhkerb_rec_drs():
     hhkerb_rec_la = get_hhkerb_rec_la()
@@ -340,13 +341,13 @@ def get_hwrcs_rec_la():
     merge['Authority'] = hwrcs_rec_bring_la['Authority']
     
     #Merge in reuse data from get_hwrcs_reu_la()
-    merge = merge.merge(get_hwrcs_reu_la(), how='left', on='Authority')
-    merge = merge.replace(np.NaN, 0)
-    merge['sum_dry_rec'] = merge['sum_dry_rec_x'] + merge['sum_dry_rec_y']
-    merge = merge.drop(['sum_dry_rec_x','sum_dry_rec_y'],axis=1)
-    merge.to_csv(op.join(data_dir, ('hwrcs_rec_la_'
-                                    + dt.datetime.today().strftime("%d%m")+ '.csv')),
-                 encodings = 'utf-8')
+    #merge = merge.merge(get_hwrcs_reu_la(), how='left', on='Authority')
+    #merge = merge.replace(np.NaN, 0)
+    #merge['sum_dry_rec'] = merge['sum_dry_rec_x'] + merge['sum_dry_rec_y']
+    #merge = merge.drop(['sum_dry_rec_x','sum_dry_rec_y'],axis=1)
+    #merge.to_csv(op.join(data_dir, ('hwrcs_rec_la_'
+    #                                + dt.datetime.today().strftime("%d%m")+ '.csv')),
+    #             encodings = 'utf-8')
     return merge
 
 def get_hwrcs_rec_drs():
@@ -652,6 +653,16 @@ Mass flow baseline master function
 
 """
 def get_massflow_baseline():
+    """
+    Input: The tonnages of DRS materials from all seven streams of mass flow for each local authority.
+    The streams are: Household Kerbside Recycling, Household Kerbside Residual, 
+    HWRCs Recycling, HWRCs Residual, Commercial Recycling, Commercial Residual, Litter Residual
+    
+    Output: A dataframe of the mass flow baseline that contains the aggregated tonnages of DRS materials
+    for Wales in the year (April 2014 to March 2015). Additional data include: total mass of materials 
+    from sold containers, and the calculated remains of DRS materials in the environment
+    """
+    #For each stream, aggregate DRS tonnages from individual LAs to Wales-level 
     hhkerb_rec_sum = (get_hhkerb_rec_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
                       .reset_index().rename(columns={'RowText': 'DRS Materials',
                                                      0: 'Household Kerbside Recycling'}))
@@ -669,13 +680,17 @@ def get_massflow_baseline():
     lit_res_sum = (get_lit_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
                    .reset_index().rename(columns={'index': 'DRS Materials',0: 'Litter Residual'}))
     
-    #Merge everything in
+    #Initialise baseline dataframe
     drs_list = ['DRS Glass Bottles','DRS Plastic Bottles','DRS Ferrous Cans','DRS Aluminium Cans',
-                'DRS Beverage Cartons','Total']
-    scot_vol_list = [165, 39, 5, 9, 5, 222]
+                'DRS Beverage Cartons','Total', 'Percent Contribution']
+    #The tonnages from Scotland were calculated from Eunomia's number of drinks and average weight
+    #for each DRS material
+    scot_vol_list = [164.8, 38.6, 5.2, 8.9, 5, 222.5, 0]
     baseline = pd.DataFrame(data={'DRS Materials':drs_list,
                                   'Total Mass in Thousand Tonnes':scot_vol_list})
-    baseline['Total Mass in Thousand Tonnes'] = baseline['Total Mass in Thousand Tonnes']*.578
+    baseline['Total Mass in Thousand Tonnes'] = baseline['Total Mass in Thousand Tonnes']*.5782
+    
+    #Merge in tonnage from every stream
     baseline = baseline.merge(hhkerb_rec_sum, how = 'left', on='DRS Materials')
     baseline = baseline.merge(hhkerb_res_sum, how = 'left', on='DRS Materials')
     baseline = baseline.merge(hwrcs_rec_sum, how = 'left', on='DRS Materials')
@@ -685,9 +700,9 @@ def get_massflow_baseline():
     baseline = baseline.merge(lit_res_sum, how = 'left', on='DRS Materials')
     
     #Calculate the rest of the measures
-    #Remains in environment could hopefully be calculated from all other measures, not an estimation
-    baseline['Remains in Environment (1%)'] = baseline['Total Mass in Thousand Tonnes']*.01
     baseline = baseline.replace(np.NaN, 0)
+    #Remains in environment could hopefully be calculated from all other measures, not a 1% estimation
+    #baseline['Remains in Environment (1%)'] = baseline['Total Mass in Thousand Tonnes']*.01
     #Calculate the total from each stream
     stream_list = ['Household Kerbside Recycling','Household Kerbside Residual',
                    'HWRCs Recycling','HWRCs Residual',
@@ -695,8 +710,7 @@ def get_massflow_baseline():
                    'Litter Residual']
     for stream in stream_list:
         baseline[stream] = np.where(baseline['DRS Materials']=='Total',
-                                                        sum(baseline[stream]),
-                                                        baseline[stream])
+                                    sum(baseline[stream]),baseline[stream])
     #Calculate our own estimate of "Remains in Environment"
     baseline['Remains in Environment (leftover)'] = (baseline['Total Mass in Thousand Tonnes'] 
                                               - baseline['Household Kerbside Recycling']
@@ -706,6 +720,16 @@ def get_massflow_baseline():
                                               - baseline['Commercial Recycling']
                                               - baseline['Commercial Residual']
                                               - baseline['Litter Residual'])
+    #Calculate percent contribution of each stream
+    stream_list.append('Remains in Environment (leftover)')
+    for stream in stream_list:
+        baseline[stream] = np.where(baseline['DRS Materials']=='Percent Contribution',
+                                    (baseline[baseline['DRS Materials']=='Total'][[stream]]
+                                    .div(2.225*.5782, axis='index')[stream]),
+                                    baseline[stream])
+    baseline['Total Mass in Thousand Tonnes'] = np.where((baseline['DRS Materials']==
+                                                          'Percent Contribution'), 100, 
+                                                         baseline['Total Mass in Thousand Tonnes'])
     
     #Export to .csv
     baseline.to_csv(op.join(data_dir, ('massflow_baseline_' 
