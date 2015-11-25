@@ -164,8 +164,9 @@ def get_hhkerb_rec_drs():
     hhkerb_rec_drs['DRS Plastic Bottles'] = hhkerb_rec_drs['Mixed Plastic Bottles']*.96
     #If info not provided from 'Mixed Plastic Bottles', use 'Plastics'. 
     #For most of these LAs, plastics are dense plastics. Use WRAP rate of 68%
+    #Second option, Use Eunomia rate of 22%
     hhkerb_rec_drs['DRS Plastic Bottles'] = np.where(hhkerb_rec_drs['DRS Plastic Bottles'].isnull(), 
-                                                     hhkerb_rec_drs['Plastics']*.68, 
+                                                     hhkerb_rec_drs['Plastics']*.22, 
                                                      hhkerb_rec_drs['DRS Plastic Bottles'])
     #For Swansea, Plastics are dense plastics plus plastic film, so the rate is 57%
     hhkerb_rec_drs['DRS Plastic Bottles'] = np.where(hhkerb_rec_drs['Authority'] 
@@ -259,8 +260,10 @@ def get_hhkerb_res_drs():
                                              'DRS Plastic Bottles','DRS Ferrous Cans',
                                              'DRS Aluminium Cans','DRS Beverage Cartons'])
     hhkerb_res_drs['Authority'] = hhkerb_res_la['Authority']
+    #Wrap rate is 0.0204, Eunomia rate is ...
     hhkerb_res_drs['DRS Glass Bottles'] = hhkerb_res_la['Collected household waste : Regular Collection']*0.0204
-    hhkerb_res_drs['DRS Plastic Bottles'] = hhkerb_res_la['Collected household waste : Regular Collection']*0.0151
+    #WRAP rate is 0.0151, Eunomia rate is 0.006048
+    hhkerb_res_drs['DRS Plastic Bottles'] = hhkerb_res_la['Collected household waste : Regular Collection']*0.006048
     hhkerb_res_drs['DRS Ferrous Cans'] = hhkerb_res_la['Collected household waste : Regular Collection']*0.001554
     hhkerb_res_drs['DRS Aluminium Cans'] = (hhkerb_res_la['Collected household waste : Regular Collection']*0.003255)
     hhkerb_res_drs['DRS Beverage Cartons'] = (hhkerb_res_la['Collected household waste : Regular Collection']*0.0037)
@@ -490,7 +493,7 @@ def get_com_rec_la():
     #nor necessary to include 'Co mingled materials'
     #Note that DRS Beverage Cartons will be generated based on figures from Commercial Residual
     com_rec_la = com_rec_la[['Authority','Mixed glass','Mixed Plastic Bottles',
-                             'Plastics','Mixed cans']]
+                             'Plastics','Mixed cans', 'Co mingled materials']]
     return com_rec_la
 
 def get_com_rec_drs():
@@ -673,7 +676,8 @@ def get_massflow_baseline():
                      .reset_index().rename(columns={'RowText': 'DRS Materials',0: 'HWRCs Recycling'}))
     hwrcs_res_sum = (get_hwrcs_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
                      .reset_index().rename(columns={'index': 'DRS Materials',0: 'HWRCs Residual'}))
-    com_rec_sum = (get_com_rec_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
+    #Trying to see if using Eunomia rates makes more sense than the interpolating one (doesnt change much)
+    com_rec_sum = (com_rec_drs_zws().sum(axis=0, numeric_only=True).div(1000).to_frame()
                    .reset_index().rename(columns={'index': 'DRS Materials',0: 'Commercial Recycling'}))
     com_res_sum = (get_com_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
                    .reset_index().rename(columns={'index': 'DRS Materials',0: 'Commercial Residual'}))
