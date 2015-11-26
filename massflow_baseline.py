@@ -652,10 +652,61 @@ def get_lit_res_drs():
     return lit_res_drs
 
 """
+Total weight modelled for each DRS material
+
+"""
+
+def get_total_weight_drs_list(ave_pet_size = 0.75):
+    scot_wgt_list = [164.8, 38.6, 5.2, 8.9, 5, 222.5, 0]
+    scot_pop = 5347600.0
+    wales_pop = 3092000.0
+    uk_pop = 64596800.0
+    wales_scot_ratio = wales_pop / scot_pop
+    wales_uk_ratio = wales_pop / uk_pop
+    #(Categories: Glass, PET, HDPE, Ferrous, Aluminium, Carton)
+    ave_kg_list = [0.378, 0.033, 0.056, 0.035, 0.017, 0.021] #From Eunomia p.A13 & p.A 
+    
+    #Glass
+    wales_gla_wgt = scot_wgt_list[0] * wales_scot_ratio
+    
+    #PET
+    uk_pet_vol = 14800000000 * 0.69
+    wales_pet_vol = uk_pet_vol * wales_uk_ratio
+    #ave_pet_size = 0.75 #Can change between 0.5 L to 1.5 L
+    wales_pet_num = wales_pet_vol / ave_pet_size
+    wales_pet_wgt = wales_pet_num * ave_kg_list[1] / 1000000
+
+    #HDPE
+    uk_hdpe_num = 4000000000
+    wales_hdpe_num = uk_hdpe_num * wales_uk_ratio
+    wales_hdpe_wgt = wales_hdpe_num * ave_kg_list[2] / 1000000
+
+    #Plastic
+    wales_pla_wgt = wales_pet_wgt + wales_hdpe_wgt
+
+    #Cans
+    uk_cans_num = 9800000000
+    wales_cans_num = uk_cans_num * wales_uk_ratio
+    wales_fer_num = wales_cans_num * 0.22
+    wales_alum_num = wales_cans_num * 0.78
+    wales_fer_wgt = wales_fer_num * ave_kg_list[3] / 1000000
+    wales_alum_wgt = wales_alum_num * ave_kg_list[4] / 1000000
+
+    #Cartons
+    uk_car_wgt = 60
+    wales_car_wgt = uk_car_wgt * wales_uk_ratio
+     
+    #Combined list
+    wales_total_wgt = wales_gla_wgt + wales_pla_wgt + wales_fer_wgt + wales_alum_wgt + wales_car_wgt
+    wales_wgt_list = [wales_gla_wgt, wales_pla_wgt, wales_fer_wgt, wales_alum_wgt, wales_car_wgt, 
+                      wales_total_wgt, 0]
+    return wales_wgt_list
+
+"""
 Mass flow baseline master function
 
 """
-def get_massflow_baseline():
+def get_massflow_baseline(com_rec_method = None):
     """
     Input: The tonnages of DRS materials from all seven streams of mass flow for each local authority.
     The streams are: Household Kerbside Recycling, Household Kerbside Residual, 
@@ -665,6 +716,11 @@ def get_massflow_baseline():
     for Wales in the year (April 2014 to March 2015). Additional data include: total mass of materials 
     from sold containers, and the calculated remains of DRS materials in the environment
     """
+    if com_rec_method is None:
+        com_rec_drs = get_com_rec_drs()
+    if com_rec_method == "Eunomia":
+        com_rec_drs = com_rec_drs_zws()
+
     #For each stream, aggregate DRS tonnages from individual LAs to Wales-level 
     hhkerb_rec_sum = (get_hhkerb_rec_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
                       .reset_index().rename(columns={'RowText': 'DRS Materials',
@@ -677,7 +733,7 @@ def get_massflow_baseline():
     hwrcs_res_sum = (get_hwrcs_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
                      .reset_index().rename(columns={'index': 'DRS Materials',0: 'HWRCs Residual'}))
     #Trying to see if using Eunomia rates makes more sense than the interpolating one (doesnt change much)
-    com_rec_sum = (com_rec_drs_zws().sum(axis=0, numeric_only=True).div(1000).to_frame()
+    com_rec_sum = (com_rec_drs.sum(axis=0, numeric_only=True).div(1000).to_frame()
                    .reset_index().rename(columns={'index': 'DRS Materials',0: 'Commercial Recycling'}))
     com_res_sum = (get_com_res_drs().sum(axis=0, numeric_only=True).div(1000).to_frame()
                    .reset_index().rename(columns={'index': 'DRS Materials',0: 'Commercial Residual'}))
@@ -687,12 +743,19 @@ def get_massflow_baseline():
     #Initialise baseline dataframe
     drs_list = ['DRS Glass Bottles','DRS Plastic Bottles','DRS Ferrous Cans','DRS Aluminium Cans',
                 'DRS Beverage Cartons','Total', 'Percent Contribution']
-    #The tonnages from Scotland were calculated from Eunomia's number of drinks and average weight
+    
+    #If using Scotland's number of containers from Eunonmia to estimate Wales data:
+    #The tonnages from Scotland were calculated from Eunomia's number of containers and average weight
     #for each DRS material
-    scot_vol_list = [164.8, 38.6, 5.2, 8.9, 5, 222.5, 0]
+    #scot_wgt_list = [164.8, 38.6, 5.2, 8.9, 5, 222.5, 0]
+    #baseline = pd.DataFrame(data={'DRS Materials':drs_list,
+    #                              'Total Weight in Thousand Tonnes':scot_wgt_list})
+    #baseline['Total Weight in Thousand Tonnes'] = baseline['Total Weight in Thousand Tonnes']*.5782
+    
+    #If using data gathered by Joan (sources specified in report), use get_total_weight_drs()
+    wales_wgt_list = get_total_weight_drs_list()
     baseline = pd.DataFrame(data={'DRS Materials':drs_list,
-                                  'Total Mass in Thousand Tonnes':scot_vol_list})
-    baseline['Total Mass in Thousand Tonnes'] = baseline['Total Mass in Thousand Tonnes']*.5782
+                                  'Total Weight in Thousand Tonnes': wales_wgt_list})
     
     #Merge in tonnage from every stream
     baseline = baseline.merge(hhkerb_rec_sum, how = 'left', on='DRS Materials')
@@ -706,7 +769,7 @@ def get_massflow_baseline():
     #Calculate the rest of the measures
     baseline = baseline.replace(np.NaN, 0)
     #Remains in environment could hopefully be calculated from all other measures, not a 1% estimation
-    #baseline['Remains in Environment (1%)'] = baseline['Total Mass in Thousand Tonnes']*.01
+    #baseline['Remains in Environment (1%)'] = baseline['Total Weight in Thousand Tonnes']*.01
     #Calculate the total from each stream
     stream_list = ['Household Kerbside Recycling','Household Kerbside Residual',
                    'HWRCs Recycling','HWRCs Residual',
@@ -716,7 +779,7 @@ def get_massflow_baseline():
         baseline[stream] = np.where(baseline['DRS Materials']=='Total',
                                     sum(baseline[stream]),baseline[stream])
     #Calculate our own estimate of "Remains in Environment"
-    baseline['Remains in Environment (leftover)'] = (baseline['Total Mass in Thousand Tonnes'] 
+    baseline['Remains in Environment (leftover)'] = (baseline['Total Weight in Thousand Tonnes'] 
                                               - baseline['Household Kerbside Recycling']
                                               - baseline['Household Kerbside Residual']
                                               - baseline['HWRCs Recycling']
@@ -731,9 +794,9 @@ def get_massflow_baseline():
                                     (baseline[baseline['DRS Materials']=='Total'][[stream]]
                                     .div(2.225*.5782, axis='index')[stream]),
                                     baseline[stream])
-    baseline['Total Mass in Thousand Tonnes'] = np.where((baseline['DRS Materials']==
+    baseline['Total Weight in Thousand Tonnes'] = np.where((baseline['DRS Materials']==
                                                           'Percent Contribution'), 100, 
-                                                         baseline['Total Mass in Thousand Tonnes'])
+                                                         baseline['Total Weight in Thousand Tonnes'])
     
     #Export to .csv
     baseline.to_csv(op.join(data_dir, ('massflow_baseline_' 
