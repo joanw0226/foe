@@ -148,11 +148,16 @@ def get_hhkerb_recreu_la():
     merge = merge.drop(['sum_dry_rec_x', 'sum_dry_rec_y'], axis=1)
     return merge
 
-def get_hhkerb_rec_drs(reuse='No', method='WRAP'):
+def get_hhkerb_rec_drs(reuse='No', method='WRAP', dry_rec = 'Sum', comingled_reject = 'Yes'):
     if reuse == 'No':
         hhkerb_rec_drs = get_hhkerb_rec_la()
-    if reuse is 'Yes':
+    if reuse == 'Yes':
         hhkerb_rec_drs = get_hhkerb_recreu_la()
+    
+    if comingled_reject == 'Yes':
+        reject_rate = 0.8915
+    if comingled_reject == 'No':
+        reject_rate = 1.0
     
     #These are WRAP rates
     mixed_glass = 0.6564
@@ -171,6 +176,11 @@ def get_hhkerb_rec_drs(reuse='No', method='WRAP'):
     if method=='Eunomia':
         mixed_glass = 0.80
         plastics = 0.22
+        
+    if dry_rec == 'Sum':
+        dry_rec = 'sum_dry_rec'
+    if dry_rec == 'Comingled':
+        dry_rec = 'Co mingled materials'
     
     #DRS Glass Bottles (derived from 'Mixed glass' or 'sum_dry_rec')
     #For those that have data for 'Mixed glass'
@@ -178,7 +188,7 @@ def get_hhkerb_rec_drs(reuse='No', method='WRAP'):
     #Using co-mingled materials
     hhkerb_rec_drs['DRS Glass Bottles'] = (hhkerb_rec_drs['DRS Glass Bottles']
                                             .replace(np.NaN, 
-                                                     hhkerb_rec_drs['sum_dry_rec'] * co_glass))
+                                                     hhkerb_rec_drs[dry_rec] * reject_rate * co_glass))
     
     #DRS Plastic Bottles (derived from 'Mixed Plastic Bottles', 'Plastics', or 'sum_dry_rec')
     #Mostly, 'Mixed Plastic Bottles' are treated as PET, HDPE, and Other. 
@@ -196,7 +206,7 @@ def get_hhkerb_rec_drs(reuse='No', method='WRAP'):
     #For LAs with co-mingled materials
     hhkerb_rec_drs['DRS Plastic Bottles'] = (hhkerb_rec_drs['DRS Plastic Bottles']
                                              .replace(np.NaN,
-                                                      hhkerb_rec_drs['sum_dry_rec'] * co_plastics))
+                                                      hhkerb_rec_drs[dry_rec]*reject_rate*co_plastics))
     
     #DRS Ferrous Cans & DRS Aluminium Cans
     #If 'Steel cans' or 'Aluminium cans' exists
@@ -213,7 +223,7 @@ def get_hhkerb_rec_drs(reuse='No', method='WRAP'):
                                                   hhkerb_rec_drs['Mixed cans'] * mixed_fer,
                                                   hhkerb_rec_drs['DRS Ferrous Cans'])
     hhkerb_rec_drs['DRS Ferrous Cans'] = (hhkerb_rec_drs['DRS Ferrous Cans']
-                                          .replace(np.NaN,hhkerb_rec_drs['sum_dry_rec'] * co_fer))
+                                          .replace(np.NaN,hhkerb_rec_drs[dry_rec]*reject_rate*co_fer))
     #DRS Aluminium Cans
     hhkerb_rec_drs['DRS Aluminium Cans'] = np.where((hhkerb_rec_drs['Mixed cans'].notnull()) &
                                                     (hhkerb_rec_drs['Authority'] 
@@ -223,14 +233,16 @@ def get_hhkerb_rec_drs(reuse='No', method='WRAP'):
                                                     hhkerb_rec_drs['Mixed cans'] * mixed_alum,
                                                     hhkerb_rec_drs['DRS Aluminium Cans'])
     hhkerb_rec_drs['DRS Aluminium Cans'] = (hhkerb_rec_drs['DRS Aluminium Cans']
-                                            .replace(np.NaN,hhkerb_rec_drs['sum_dry_rec'] * co_alum))
+                                            .replace(np.NaN,
+                                                     hhkerb_rec_drs[dry_rec]*reject_rate*co_alum))
 
     #DRS Beverage Cartons
     #For two LAs with info on beverage cartons, use the specific data
     hhkerb_rec_drs['DRS Beverage Cartons'] = hhkerb_rec_drs['Composite food and beverage cartons']
     #For the rest, use WRAP rate of 0.31% on the sum of dry recycling
     hhkerb_rec_drs['DRS Beverage Cartons'] = (hhkerb_rec_drs['DRS Beverage Cartons']
-                                               .replace(np.NaN, hhkerb_rec_drs['sum_dry_rec'] * co_bev))
+                                               .replace(np.NaN,
+                                                        hhkerb_rec_drs[dry_rec]*reject_rate*co_bev))
     hhkerb_rec_drs = hhkerb_rec_drs[['Authority','DRS Glass Bottles','DRS Plastic Bottles',
                                      'DRS Ferrous Cans','DRS Aluminium Cans','DRS Beverage Cartons']]
     
@@ -273,8 +285,8 @@ def get_hhkerb_resrej_la():
     hhkerb_res_la = get_hhkerb_res_la()
     merge = hhkerb_res_la.merge(hhkerb_rej_la, how='left', on='Authority')
     merge['Data'] = merge['Data'].replace(np.NaN, 0)
-    merge['Collected household waste : Regular Collection'] = (merge['Collected household waste : Regular Collection'] 
-                                                               + merge['Data'])
+    (merge['Collected household waste : Regular Collection'] = 
+     merge['Collected household waste : Regular Collection']+ merge['Data'])
     merge = merge.drop(['Data'],axis=1)
     return merge
 
@@ -285,27 +297,31 @@ def get_hhkerb_res_drs(reject = 'No', method='WRAP'):
         hhkerb_res_la = get_hhkerb_resrej_la()
     
     #These are WRAP rates
-    glass = 0.0
-    
-    plastics = 0.6847
-    ferrous = 0.1953
-    alum = 0.9483
-    cartons = 0.0031
+    glass = 0.0204
+    plastics = 0.0151
+    ferrous = 0.001554
+    alum = 0.003255
+    cartons = 0.0037
     if method=='Eunomia':
-        mixed_glass = 0.80
-        plastics = 0.22
+        glass = 0.0215
+        plastics = 0.006
     
     hhkerb_res_drs = pd.DataFrame(columns=['Authority','DRS Glass Bottles',
                                              'DRS Plastic Bottles','DRS Ferrous Cans',
                                              'DRS Aluminium Cans','DRS Beverage Cartons'])
     hhkerb_res_drs['Authority'] = hhkerb_res_la['Authority']
     #Wrap rate is 0.0204, Eunomia rate is ...
-    hhkerb_res_drs['DRS Glass Bottles'] = hhkerb_res_la['Collected household waste : Regular Collection']*0.0204
+    (hhkerb_res_drs['DRS Glass Bottles'] = 
+     hhkerb_res_la['Collected household waste : Regular Collection']*glass)
     #WRAP rate is 0.0151, Eunomia rate is 0.006048
-    hhkerb_res_drs['DRS Plastic Bottles'] = hhkerb_res_la['Collected household waste : Regular Collection']*0.006048
-    hhkerb_res_drs['DRS Ferrous Cans'] = hhkerb_res_la['Collected household waste : Regular Collection']*0.001554
-    hhkerb_res_drs['DRS Aluminium Cans'] = (hhkerb_res_la['Collected household waste : Regular Collection']*0.003255)
-    hhkerb_res_drs['DRS Beverage Cartons'] = (hhkerb_res_la['Collected household waste : Regular Collection']*0.0037)
+    (hhkerb_res_drs['DRS Plastic Bottles'] = 
+     hhkerb_res_la['Collected household waste : Regular Collection']*plastics)
+    (hhkerb_res_drs['DRS Ferrous Cans'] = 
+     hhkerb_res_la['Collected household waste : Regular Collection']*ferrous)
+    (hhkerb_res_drs['DRS Aluminium Cans'] = 
+     hhkerb_res_la['Collected household waste : Regular Collection']*alum)
+    (hhkerb_res_drs['DRS Beverage Cartons'] = 
+     hhkerb_res_la['Collected household waste : Regular Collection']*cartons)
     hhkerb_res_drs.to_csv(op.join(data_dir, ('hhkerb_res_drs_'
                                                + dt.datetime.today().strftime("%d%m")
                                                + '.csv')), 
@@ -754,7 +770,7 @@ Mass flow baseline master function
 
 """
 def get_massflow_baseline(reuse = 'No', reject = 'No', hhkerb_rec_method = 'WRAP', 
-                          com_rec_method = 'Interpolation'):
+                          com_rec_method = 'Interpolation', dry_rec_method = 'Sum'):
     """
     Input: The tonnages of DRS materials from all seven streams of mass flow for each local authority.
     The streams are: Household Kerbside Recycling, Household Kerbside Residual, 
@@ -771,7 +787,7 @@ def get_massflow_baseline(reuse = 'No', reject = 'No', hhkerb_rec_method = 'WRAP
         com_rec_drs = get_com_rec_drs_zws()
 
     #For each stream, aggregate DRS tonnages from individual LAs to Wales-level 
-    hhkerb_rec_sum = (get_hhkerb_rec_drs(reuse=reuse, method=hhkerb_rec_method)
+    hhkerb_rec_sum = (get_hhkerb_rec_drs(reuse=reuse, method=hhkerb_rec_method, dry_rec=dry_rec_method)
                       .sum(axis=0, numeric_only=True).div(1000)
                       .to_frame().reset_index().rename(columns={'RowText': 'DRS Materials',
                                                      0: 'Household Kerbside Recycling'}))
